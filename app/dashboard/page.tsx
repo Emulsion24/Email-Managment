@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Search, Mail, LogOut, ChevronLeft, ChevronRight, 
-  Loader2, Plus, X, Users, ShieldCheck, AlertCircle 
+  Loader2, Plus, X, Users, ShieldCheck, AlertCircle, UserPlus
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -19,7 +19,19 @@ interface UserRecord {
   is_bulk?: boolean;
 }
 
+interface BulkRecipient {
+  email: string;
+  name: string;
+}
+
 type TabType = 'user' | 'installer' | 'history';
+type RoleType = 'user' | 'installer';
+
+// Define the templates available for each role
+const TEMPLATE_OPTIONS: Record<RoleType, string[]> = {
+  user: ["User Welcome Email", "User Project Reminder"],
+  installer: ["Installer Welcome Email", "New Projects Coming"]
+};
 
 export default function Dashboard() {
   const router = useRouter();
@@ -30,22 +42,16 @@ export default function Dashboard() {
   const [profiles, setProfiles] = useState<UserRecord[]>([]);
   const [isFetching, setIsFetching] = useState(true);
   
-  // Form States
-  const templates = ["User Welcome Email", "Installer Welcome Email"];
-  const [formData, setFormData] = useState({ 
-    name: '', 
-    email: '', 
-    template: 'User Welcome Email', 
-    role: 'user' 
-  });
+  // Bulk Form States
+  const [bulkRole, setBulkRole] = useState<RoleType>('user');
+  const [bulkTemplate, setBulkTemplate] = useState(TEMPLATE_OPTIONS['user'][0]);
   
-  // Bulk States
-  const [bulkEmails, setBulkEmails] = useState<string[]>([]);
+  // Recipient Management States
+  const [recipients, setRecipients] = useState<BulkRecipient[]>([]);
   const [manualEmail, setManualEmail] = useState('');
-  const [bulkTemplate, setBulkTemplate] = useState('User Welcome Email');
-  const [bulkRole, setBulkRole] = useState('user');
+  const [manualName, setManualName] = useState('');
+  
   const [isBulkSending, setIsBulkSending] = useState(false);
-  const [loading, setLoading] = useState(false); 
 
   // Search & Pagination States
   const [searchTerm, setSearchTerm] = useState('');
@@ -53,19 +59,25 @@ export default function Dashboard() {
   const [totalPages, setTotalPages] = useState(1);
   const [historyFilter, setHistoryFilter] = useState<'all' | 'user' | 'installer' | 'bulk'>('all');
 
-  // --- 1. AUTHENTICATION & LOGOUT ---
-const logout = async () => {
-  try {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    document.cookie = "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    toast.success("Logged out successfully");
-    window.location.href = '/';
-  } catch (err) {
-    console.error("Logout failed", err);
-  }
-};
+  // --- EFFECT: Update Template options when Role changes ---
+  useEffect(() => {
+    // Automatically set the template to the first option of the selected role
+    setBulkTemplate(TEMPLATE_OPTIONS[bulkRole][0]);
+  }, [bulkRole]);
 
-  // --- 2. DATA SYNC (WITH AUTH CHECK) ---
+  // --- 1. AUTHENTICATION & LOGOUT ---
+  const logout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      document.cookie = "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      toast.success("Logged out successfully");
+      window.location.href = '/';
+    } catch (err) {
+      console.error("Logout failed", err);
+    }
+  };
+
+  // --- 2. DATA SYNC ---
   const fetchData = async () => {
     setIsFetching(true);
     try {
@@ -103,69 +115,53 @@ const logout = async () => {
     setCurrentPage(1);
   }, [activeTab, searchTerm, historyFilter]);
 
-  // --- 3. EMAIL ACTIONS ---
-  const handleSend = async () => {
-    if (!formData.email) return toast.error("Please select a recipient first");
-    
-    const loadingToast = toast.loading("Dispatching email...");
-    setLoading(true);
-    
-    try {
-      const res = await fetch('/api/send-mail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: formData.email, 
-          name: formData.name, 
-          templateName: formData.template,
-          role: formData.role,
-          isBulk: false
-        }),
-      });
+  // --- 3. RECIPIENT MANAGEMENT ---
+  const addRecipient = (email: string, name: string) => {
+    const trimmedEmail = email.trim();
+    const trimmedName = name.trim() || "Valued User";
 
-      if (res.status === 401 || res.status === 403) {
-        logout();
-        return;
-      }
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+        return toast.error("Invalid email address");
+    }
 
-      if (res.ok) {
-        toast.success(`Email sent successfully`, { id: loadingToast });
-        if (activeTab === 'history') fetchData();
-      } else {
-        throw new Error();
-      }
-    } catch (error) {
-      toast.error("Failed to send email.", { id: loadingToast });
-    } finally {
-      setLoading(false);
+    if (recipients.some(r => r.email === trimmedEmail)) {
+        return toast.error("User already in list");
+    }
+
+    setRecipients([...recipients, { email: trimmedEmail, name: trimmedName }]);
+    
+    // Clear manual inputs if they were used
+    if (manualEmail === email) {
+        setManualEmail('');
+        setManualName('');
     }
   };
 
-  const addBulkEmail = (email: string) => {
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail || !trimmedEmail.includes('@')) return;
-    if (bulkEmails.includes(trimmedEmail)) return toast.error("Already in list");
-    setBulkEmails([...bulkEmails, trimmedEmail]);
-    setManualEmail('');
+  const removeRecipient = (email: string) => {
+    setRecipients(recipients.filter(r => r.email !== email));
   };
 
-  const removeBulkEmail = (email: string) => {
-    setBulkEmails(bulkEmails.filter(e => e !== email));
-  };
+  const clearAll = () => {
+      setRecipients([]);
+      toast.success("List cleared");
+  }
 
+  // --- 4. BULK SEND ACTION ---
   const handleBulkSend = async () => {
-    if (bulkEmails.length === 0) return toast.error("Add at least one email");
+    if (recipients.length === 0) return toast.error("Add at least one recipient");
+    
     setIsBulkSending(true);
-    const bulkToast = toast.loading(`Sending ${bulkEmails.length} emails...`);
+    const bulkToast = toast.loading(`Dispatching to ${recipients.length} recipients...`);
 
     try {
-      for (const email of bulkEmails) {
+      // Loop through recipients and send individualized emails
+      for (const recipient of recipients) {
         const res = await fetch('/api/send-mail', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            email: email, 
-            name: "Bulk Recipient", 
+            email: recipient.email, 
+            name: recipient.name, // Sends specific name
             templateName: bulkTemplate,
             role: bulkRole,
             isBulk: true 
@@ -173,17 +169,18 @@ const logout = async () => {
         });
         if (res.status === 401 || res.status === 403) { logout(); return; }
       }
-      toast.success("Bulk dispatch completed", { id: bulkToast });
-      setBulkEmails([]);
+      
+      toast.success("All emails dispatched successfully", { id: bulkToast });
+      setRecipients([]); // Clear list on success
       if (activeTab === 'history') fetchData();
     } catch (error) {
-      toast.error("Error during bulk send", { id: bulkToast });
+      toast.error("Error during bulk dispatch", { id: bulkToast });
     } finally {
       setIsBulkSending(false);
     }
   };
 
-  // --- 4. RENDER LOGIC ---
+  // --- 5. RENDER LOGIC ---
   const SkeletonItem = () => (
     <div className="p-4 bg-white border border-slate-100 rounded-xl animate-pulse">
       <div className="flex justify-between items-start">
@@ -256,6 +253,7 @@ const logout = async () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* LEFT COLUMN: DATA LIST */}
           <div className="lg:col-span-5 space-y-4">
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[580px]">
               <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
@@ -267,7 +265,7 @@ const logout = async () => {
                   <select 
                     className="text-xs font-bold text-blue-600 outline-none bg-transparent"
                     value={historyFilter}
-                    onChange={(e) => setHistoryFilter(e.target.value as any)}
+                    onChange={(e) => setHistoryFilter(e.target.value as 'all' | 'user' | 'installer' | 'bulk')}
                   >
                     <option value="all">All Logs</option>
                     <option value="user">Users</option>
@@ -283,33 +281,26 @@ const logout = async () => {
                   <div 
                     key={item.id} 
                     onClick={() => {
+                      if(activeTab === 'history') return;
                       const email = item.email || item.recipient_email || '';
-                      const role = item.role || (activeTab === 'installer' ? 'installer' : 'user');
-                      setFormData({ 
-                        ...formData, 
-                        name: item.name || item.recipient_name || '', 
-                        email, 
-                        role,
-                        template: role === 'installer' ? 'Installer Welcome Email' : 'User Welcome Email'
-                      });
-                      if(activeTab !== 'history') addBulkEmail(email); 
-                      toast.success("Added to context", { duration: 800 });
+                      const name = item.name || item.recipient_name || '';
+                      addRecipient(email, name);
+                      toast.success("Added to recipients");
                     }}
-                    className="p-4 bg-white border border-slate-100 rounded-xl cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-all group"
+                    className={`p-4 bg-white border border-slate-100 rounded-xl transition-all group ${activeTab !== 'history' ? 'cursor-pointer hover:border-blue-300 hover:bg-blue-50/30' : ''}`}
                   >
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{item.name || item.recipient_name}</p>
                         <p className="text-xs text-slate-500">{item.email || item.recipient_email}</p>
                       </div>
-                      {/* Added Role Tag for User/Installer Tabs */}
                       {activeTab !== 'history' && (
-                        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500 uppercase">
-                          {item.role}
-                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                             <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500 uppercase">{item.role}</span>
+                             <Plus className="w-4 h-4 text-blue-300 group-hover:text-blue-600" />
+                        </div>
                       )}
                     </div>
-                    {/* Role is already here for history, maintained consistent style */}
                     {activeTab === 'history' && (
                       <div className="mt-2 flex items-center justify-between border-t border-slate-50 pt-2">
                         <span className="text-[10px] font-bold text-blue-600 uppercase italic">{item.template_name}</span>
@@ -349,69 +340,117 @@ const logout = async () => {
             </div>
           </div>
 
+          {/* RIGHT COLUMN: BULK DISPATCH ONLY */}
           <div className="lg:col-span-7 space-y-6">
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8">
-              <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <Mail className="w-5 h-5 text-blue-600" /> Direct Messaging
-              </h2>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Full Name</label>
-                    <input className="w-full px-4 py-3 border rounded-xl bg-slate-50 outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Email</label>
-                    <input className="w-full px-4 py-3 border rounded-xl bg-slate-50 outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-                  </div>
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 h-full flex flex-col">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    <Users className="w-6 h-6 text-blue-600" /> Bulk Dispatcher
+                </h2>
+                <div className="flex items-center gap-2">
+                     <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
+                        {recipients.length} Selected
+                     </span>
+                     {recipients.length > 0 && (
+                         <button onClick={clearAll} className="text-xs text-red-500 hover:underline font-medium">Clear All</button>
+                     )}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <select className="w-full px-4 py-3 border rounded-xl bg-slate-50 outline-none" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
-                    <option value="user">Assign Role: User</option>
-                    <option value="installer">Assign Role: Installer</option>
-                  </select>
-                  <select className="w-full px-4 py-3 border rounded-xl bg-slate-50 outline-none" value={formData.template} onChange={e => setFormData({...formData, template: e.target.value})}>
-                    {templates.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <button onClick={handleSend} disabled={loading || !formData.email} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-all disabled:bg-slate-200 shadow-lg shadow-blue-100">
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Send Individual Email"}
-                </button>
               </div>
-            </div>
 
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8">
-              <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <Users className="w-5 h-5 text-slate-900" /> Bulk Dispatch
-              </h2>
-              <div className="space-y-4">
+              <div className="space-y-6 flex-1">
+                {/* 1. Configuration */}
                 <div className="grid grid-cols-2 gap-4">
-                  <select className="w-full px-4 py-3 border rounded-xl bg-slate-50 outline-none" value={bulkRole} onChange={e => setBulkRole(e.target.value)}>
-                    <option value="user">Targeting: Users</option>
-                    <option value="installer">Targeting: Installers</option>
-                  </select>
-                  <select className="w-full px-4 py-3 border rounded-xl bg-slate-50 outline-none" value={bulkTemplate} onChange={e => setBulkTemplate(e.target.value)}>
-                    {templates.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
+                  <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Assign Role</label>
+                      <select 
+                        className="w-full px-4 py-3 border rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-blue-100 transition-all" 
+                        value={bulkRole} 
+                        onChange={e => setBulkRole(e.target.value as RoleType)}
+                      >
+                        <option value="user">User</option>
+                        <option value="installer">Installer</option>
+                      </select>
+                  </div>
+                  <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Email Template</label>
+                      <select 
+                        className="w-full px-4 py-3 border rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-blue-100 transition-all" 
+                        value={bulkTemplate} 
+                        onChange={e => setBulkTemplate(e.target.value)}
+                      >
+                        {TEMPLATE_OPTIONS[bulkRole].map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                  </div>
                 </div>
                 
-                <div className="relative">
-                  <input placeholder="Add email manually..." className="w-full pl-4 pr-12 py-3 border rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500/20" value={manualEmail} onChange={e => setManualEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && addBulkEmail(manualEmail)} />
-                  <button onClick={() => addBulkEmail(manualEmail)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Plus /></button>
+                {/* 2. Manual Add */}
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <label className="text-[10px] font-bold uppercase text-slate-500 flex items-center gap-1">
+                        <UserPlus className="w-3 h-3" /> Manual Entry
+                    </label>
+                    <div className="flex gap-2">
+                        <input 
+                            placeholder="Recipient Name" 
+                            className="flex-1 px-4 py-2 border rounded-lg bg-white outline-none focus:ring-2 focus:ring-blue-500/20 text-sm" 
+                            value={manualName} 
+                            onChange={e => setManualName(e.target.value)} 
+                        />
+                        <input 
+                            placeholder="recipient@email.com" 
+                            className="flex-1 px-4 py-2 border rounded-lg bg-white outline-none focus:ring-2 focus:ring-blue-500/20 text-sm" 
+                            value={manualEmail} 
+                            onChange={e => setManualEmail(e.target.value)} 
+                            onKeyDown={e => e.key === 'Enter' && addRecipient(manualEmail, manualName)} 
+                        />
+                        <button 
+                            onClick={() => addRecipient(manualEmail, manualName)} 
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                            <Plus className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2 p-4 bg-slate-50 rounded-xl min-h-[100px] border border-dashed border-slate-200 max-h-40 overflow-y-auto">
-                  {bulkEmails.length === 0 && <span className="text-sm text-slate-400 italic">No recipients. Select records on the left or type manually above.</span>}
-                  {bulkEmails.map((email) => (
-                    <span key={email} className="flex items-center gap-1 px-3 py-1 bg-white border border-blue-200 text-blue-600 rounded-full text-xs font-bold shadow-sm">
-                      {email}
-                      <button onClick={() => removeBulkEmail(email)} className="hover:text-red-500 transition-colors"><X className="w-3 h-3" /></button>
-                    </span>
-                  ))}
+                {/* 3. Recipient List */}
+                <div className="flex-1 min-h-[200px] p-4 bg-slate-50/50 rounded-xl border border-dashed border-slate-300">
+                  {recipients.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 py-10">
+                        <Users className="w-8 h-8 opacity-20" />
+                        <span className="text-sm italic">Recipients list is empty.</span>
+                        <span className="text-xs opacity-60">Select from the list on the left or add manually above.</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                        {recipients.map((r) => (
+                            <div key={r.email} className="flex items-center gap-2 pl-3 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm group hover:border-blue-300 transition-all">
+                                <div className="flex flex-col leading-none">
+                                    <span className="text-xs font-bold text-slate-700">{r.name}</span>
+                                    <span className="text-[10px] text-slate-400">{r.email}</span>
+                                </div>
+                                <button onClick={() => removeRecipient(r.email)} className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-md transition-colors">
+                                    <X className="w-3 h-3" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                  )}
                 </div>
 
-                <button onClick={handleBulkSend} disabled={isBulkSending || bulkEmails.length === 0} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-black transition-all disabled:bg-slate-200">
-                  {isBulkSending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : `Dispatch to ${bulkEmails.length} recipients`}
+                {/* 4. Action Button */}
+                <button 
+                    onClick={handleBulkSend} 
+                    disabled={isBulkSending || recipients.length === 0} 
+                    className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-black transition-all disabled:bg-slate-200 disabled:text-slate-400 shadow-lg shadow-slate-200"
+                >
+                  {isBulkSending ? (
+                      <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-5 h-5 animate-spin" /> Sending...
+                      </div>
+                  ) : (
+                      `Dispatch Emails to ${recipients.length} Recipients`
+                  )}
                 </button>
               </div>
             </div>

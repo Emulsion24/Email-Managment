@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       message: "Admin authenticated successfully" 
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Auth Error:", err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }

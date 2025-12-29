@@ -26,7 +26,7 @@ export async function GET(req: Request) {
 
     // --- 2. QUERY PARAMETERS ---
     const { searchParams } = new URL(req.url);
-    const type = searchParams.get('type'); 
+    const type = searchParams.get('type') || ''; 
     const search = searchParams.get('search') || '';
     const page = parseInt(searchParams.get('page') || '1');
     const roleFilter = searchParams.get('roleFilter') || 'all';
@@ -36,7 +36,7 @@ export async function GET(req: Request) {
 
     let dataQuery = '';
     let countQuery = '';
-    let params: any[] = [];
+    let params: (string | number)[] = [];
 
     // --- 3. FETCHING LOGIC ---
     if (type === 'history') {
@@ -82,8 +82,9 @@ export async function GET(req: Request) {
       }
     });
 
-  } catch (error: any) {
-    console.error("Fetch API Error:", error.message);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Fetch API Error:", errorMessage);
     return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 });
   }
 }
