@@ -336,7 +336,8 @@ export async function POST(req: Request) {
     
     <style type="text/css">
         /* --- RESET & BASICS --- */
-        body { margin: 0; padding: 0; background-color: #f4f4f4; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+        /* CHANGED: Background to #ffffff (White) for desktop/default */
+        body { margin: 0; padding: 0; background-color: #ffffff; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
         table { border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
         img { border: 0; display: block; line-height: 100%; outline: none; text-decoration: none; }
         a { text-decoration: none; color: inherit; }
@@ -346,7 +347,8 @@ export async function POST(req: Request) {
         .font-body { font-family: 'Open Sans', Arial, sans-serif; }
         
         /* --- UTILS --- */
-        .wrapper { width: 100%; table-layout: fixed; background-color: #f4f4f4; padding-bottom: 40px; }
+        /* CHANGED: Wrapper background to #ffffff (White) */
+        .wrapper { width: 100%; table-layout: fixed; background-color: #ffffff; padding-bottom: 40px; }
         .main-container { background-color: #ffffff; margin: 0 auto; width: 600px; max-width: 600px; }
         
         /* --- HERO BACKGROUND CONTROL --- */
@@ -447,6 +449,10 @@ export async function POST(req: Request) {
         @media screen and (max-width: 600px) {
             .main-container { width: 100% !important; }
             
+            /* ADDED: Turn background Blue specifically on mobile */
+            body { background-color: #4a68c5 !important; }
+            .wrapper { background-color: #4a68c5 !important; }
+
             /* HERO FIXES */
             .hero-cell { 
                 padding-left: 15px !important; 
@@ -455,10 +461,8 @@ export async function POST(req: Request) {
             }
             
             .hero-bg-dynamic {
-                /* FIX: Reduced height to "zoom out" slightly */
                 height: 380px !important; 
                 padding: 40px 25px !important; 
-                /* FIX: 72% pulls the right-side people closer to the left-side text */
                 background-position: 72% center !important;
                 border-bottom-right-radius: 100px !important; 
                 border-bottom-left-radius: 30px !important;
@@ -477,7 +481,7 @@ export async function POST(req: Request) {
                 white-space: normal !important; 
                 line-height: 1.5 !important;
                 margin-bottom: 15px !important;
-                width: auto !important; /* Shrunk to fit text */
+                width: auto !important; 
                 display: inline-block !important;
                 max-width: 90% !important;
             }
@@ -494,7 +498,6 @@ export async function POST(req: Request) {
             .mobile-stack { display: block !important; width: 100% !important; padding-right: 0 !important; padding-left: 0 !important; margin-bottom: 20px !important; text-align: center !important; }
             .mobile-padding { padding-left: 20px !important; padding-right: 20px !important; }
             
-            /* Feature Cards Uniformity */
             .feature-card { 
                 height: 170px !important; 
                 margin-bottom: 15px !important; 
@@ -530,13 +533,16 @@ export async function POST(req: Request) {
 
                         <td align="right" valign="top" style="padding-top:6px; padding-right:10px;">
                             <a href="https://www.facebook.com/rezillion.energy/" style="margin-left:10px;">
-                                <img src="https://img.icons8.com/ios-filled/50/ffffff/facebook-f.png" width="16">
+                                <img src="https://img.icons8.com/ios-filled/50/ffffff/facebook-f.png" width="16" alt="Facebook">
                             </a>
                             <a href="https://www.instagram.com/rezillion.energy/" style="margin-left:10px;">
-                                <img src="https://img.icons8.com/ios-filled/50/ffffff/instagram-new.png" width="16">
+                                <img src="https://img.icons8.com/ios-filled/50/ffffff/instagram-new.png" width="16" alt="Instagram">
                             </a>
                             <a href="https://x.com/Rezillionenergy" style="margin-left:10px;">
-                                <img src="https://img.icons8.com/ios-filled/50/ffffff/twitter.png" width="16">
+                                <img src="https://img.icons8.com/ios-filled/50/ffffff/twitter.png" width="16" alt="Twitter">
+                            </a>
+                            <a href="https://www.youtube.com/@rezillion.energy" style="margin-left:10px;">
+                                <img src="https://img.icons8.com/ios-filled/50/ffffff/youtube-play.png" width="16" alt="YouTube">
                             </a>
                         </td>
                     </tr>
