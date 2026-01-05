@@ -299,8 +299,8 @@ export async function POST(req: Request) {
         <table border="0" cellpadding="0" cellspacing="0" width="100%">
             <tr>
                 <td align="center" style="color: #ffffff; font-size: 13px; line-height: 1.4; font-family: Arial, sans-serif; padding-bottom: 10px;">
-                    Reach us on our social media profiles or email at<br>
-                    <a href="mailto:hello@rezilliontech.com" style="color: #ffffff; text-decoration: none; font-weight: bold;">hello@rezilliontech.com</a>
+                    Reach us on Phone or email at<br>
+                    <a href="mailto:hello@rezilliontech.com" style="color: #ffffff; text-decoration: none; font-weight: bold;">hello@rezilliontech.com  </a> <a>|</a> <a href="tel:+917031207574" style="color: #ffffff; text-decoration: none; font-weight: bold;"> +91 7031207574</a>
                 </td>
             </tr>
             <tr>
@@ -851,7 +851,7 @@ export async function POST(req: Request) {
 
     // --- 5. DISPATCH EMAIL ---
     await transporter.sendMail({
-      from: `"Rezillion Admin" <${process.env.EMAIL_USER}>`,
+      from: `"Rezillion " <${process.env.EMAIL_USER}>`,
       to: email,
       subject: subject,
       html: emailHtml, 
