@@ -1,11 +1,14 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+// Removed unused useRouter
 import { 
   Search, Mail, LogOut, ChevronLeft, ChevronRight, 
-  Loader2, Plus, X, Users, ShieldCheck, AlertCircle, UserPlus
+  Loader2, Plus, X, Users, ShieldCheck, AlertCircle, 
+  UserPlus, UploadCloud, FileSpreadsheet
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import Papa from 'papaparse'; 
+import * as XLSX from 'xlsx'; 
 
 interface UserRecord {
   id: number;
@@ -27,14 +30,13 @@ interface BulkRecipient {
 type TabType = 'user' | 'installer' | 'history';
 type RoleType = 'user' | 'installer';
 
-// Define the templates available for each role
 const TEMPLATE_OPTIONS: Record<RoleType, string[]> = {
   user: ["User Welcome Email", "User Project Reminder"],
   installer: ["Installer Welcome Email", "New Projects Coming"]
 };
 
 export default function Dashboard() {
-  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Auth & UI States
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -59,14 +61,13 @@ export default function Dashboard() {
   const [totalPages, setTotalPages] = useState(1);
   const [historyFilter, setHistoryFilter] = useState<'all' | 'user' | 'installer' | 'bulk'>('all');
 
-  // --- EFFECT: Update Template options when Role changes ---
   useEffect(() => {
-    // Automatically set the template to the first option of the selected role
     setBulkTemplate(TEMPLATE_OPTIONS[bulkRole][0]);
   }, [bulkRole]);
 
   // --- 1. AUTHENTICATION & LOGOUT ---
-  const logout = async () => {
+  // Wrapped in useCallback to satisfy linter dependencies
+  const logout = useCallback(async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
       document.cookie = "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
@@ -75,10 +76,11 @@ export default function Dashboard() {
     } catch (err) {
       console.error("Logout failed", err);
     }
-  };
+  }, []);
 
   // --- 2. DATA SYNC ---
-  const fetchData = async () => {
+  // Wrapped in useCallback so it can be added to useEffect dependency array
+  const fetchData = useCallback(async () => {
     setIsFetching(true);
     try {
       const params = new URLSearchParams({
@@ -101,15 +103,17 @@ export default function Dashboard() {
       setTotalPages(result.meta?.totalPages || 1);
       setIsAuthorized(true);
     } catch (err) {
+      console.error(err); // Log error to fix unused var warning
       toast.error("Connection error. Check your internet.");
     } finally {
       setIsFetching(false);
     }
-  };
+  }, [activeTab, searchTerm, currentPage, historyFilter, logout]);
 
+  // Added fetchData to dependency array
   useEffect(() => {
     fetchData();
-  }, [activeTab, searchTerm, currentPage, historyFilter]);
+  }, [fetchData]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -128,12 +132,99 @@ export default function Dashboard() {
         return toast.error("User already in list");
     }
 
-    setRecipients([...recipients, { email: trimmedEmail, name: trimmedName }]);
+    setRecipients(prev => [...prev, { email: trimmedEmail, name: trimmedName }]);
     
-    // Clear manual inputs if they were used
     if (manualEmail === email) {
         setManualEmail('');
         setManualName('');
+    }
+  };
+
+  // --- 4. CSV/EXCEL PROCESSING ---
+  // Changed type from any[] to unknown[] and cast properly
+  const processImportedData = (data: unknown[]) => {
+    const newRecipients: BulkRecipient[] = [];
+    let duplicateCount = 0;
+    let invalidCount = 0;
+
+    data.forEach((row) => {
+      // Type Guard: Ensure row is an object
+      if (typeof row !== 'object' || row === null) return;
+      const record = row as Record<string, unknown>;
+
+      // Normalize keys to lower case
+      const keys = Object.keys(record).reduce((acc, key) => {
+        acc[key.toLowerCase().trim()] = record[key];
+        return acc;
+      }, {} as Record<string, unknown>);
+
+      // Extract values safely
+      const email = keys['email'] || keys['e-mail'] || keys['email address'] || keys['mail'];
+      const name = keys['name'] || keys['full name'] || keys['firstname'] || keys['user'] || 'Valued User';
+
+      // Validate
+      if (typeof email === 'string' && email.includes('@')) {
+         const exists = recipients.some(r => r.email === email) || newRecipients.some(r => r.email === email);
+         if (!exists) {
+           newRecipients.push({ email: email.trim(), name: String(name).trim() });
+         } else {
+           duplicateCount++;
+         }
+      } else {
+        invalidCount++;
+      }
+    });
+
+    if (newRecipients.length > 0) {
+      setRecipients(prev => [...prev, ...newRecipients]);
+      toast.success(`Imported ${newRecipients.length} users!`);
+    } else if (invalidCount > 0) {
+      toast.error("No valid emails found in file.");
+    }
+    
+    if (duplicateCount > 0) toast(`Skipped ${duplicateCount} duplicates`, { icon: 'ℹ️' });
+    
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const fileName = file.name.toLowerCase();
+
+    // Handle Excel
+    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = e.target?.result;
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0]; 
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          processImportedData(jsonData);
+        } catch (error) {
+          console.error(error); // Log error
+          toast.error("Failed to parse Excel file");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } 
+    // Handle CSV
+    else if (fileName.endsWith('.csv')) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => processImportedData(results.data),
+        error: (error) => {
+            console.error(error); // Log error
+            toast.error("Failed to parse CSV file");
+        }
+      });
+    } 
+    else {
+      toast.error("Unsupported file format. Use .csv or .xlsx");
     }
   };
 
@@ -146,7 +237,7 @@ export default function Dashboard() {
       toast.success("List cleared");
   }
 
-  // --- 4. BULK SEND ACTION ---
+  // --- 5. BULK SEND ACTION ---
   const handleBulkSend = async () => {
     if (recipients.length === 0) return toast.error("Add at least one recipient");
     
@@ -154,14 +245,13 @@ export default function Dashboard() {
     const bulkToast = toast.loading(`Dispatching to ${recipients.length} recipients...`);
 
     try {
-      // Loop through recipients and send individualized emails
       for (const recipient of recipients) {
         const res = await fetch('/api/send-mail', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             email: recipient.email, 
-            name: recipient.name, // Sends specific name
+            name: recipient.name,
             templateName: bulkTemplate,
             role: bulkRole,
             isBulk: true 
@@ -171,16 +261,17 @@ export default function Dashboard() {
       }
       
       toast.success("All emails dispatched successfully", { id: bulkToast });
-      setRecipients([]); // Clear list on success
+      setRecipients([]); 
       if (activeTab === 'history') fetchData();
     } catch (error) {
+      console.error(error); // Log error
       toast.error("Error during bulk dispatch", { id: bulkToast });
     } finally {
       setIsBulkSending(false);
     }
   };
 
-  // --- 5. RENDER LOGIC ---
+  // --- UI RENDER ---
   const SkeletonItem = () => (
     <div className="p-4 bg-white border border-slate-100 rounded-xl animate-pulse">
       <div className="flex justify-between items-start">
@@ -386,10 +477,30 @@ export default function Dashboard() {
                 </div>
                 
                 {/* 2. Manual Add */}
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 flex items-center gap-1">
-                        <UserPlus className="w-3 h-3" /> Manual Entry
-                    </label>
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-bold uppercase text-slate-500 flex items-center gap-1">
+                          <UserPlus className="w-3 h-3" /> Add Recipients
+                      </label>
+                      
+                      {/* --- EXCEL/CSV INPUT BUTTON --- */}
+                      <div>
+                        <input 
+                          type="file" 
+                          accept=".csv, .xlsx, .xls"
+                          ref={fileInputRef}
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                        <button 
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex items-center gap-1 text-[10px] font-bold uppercase text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+                        >
+                          <FileSpreadsheet className="w-3 h-3" /> Upload Excel/CSV
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="flex gap-2">
                         <input 
                             placeholder="Recipient Name" 
@@ -417,17 +528,20 @@ export default function Dashboard() {
                 <div className="flex-1 min-h-[200px] p-4 bg-slate-50/50 rounded-xl border border-dashed border-slate-300">
                   {recipients.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 py-10">
-                        <Users className="w-8 h-8 opacity-20" />
+                        <UploadCloud className="w-12 h-12 opacity-20" />
                         <span className="text-sm italic">Recipients list is empty.</span>
-                        <span className="text-xs opacity-60">Select from the list on the left or add manually above.</span>
+                        <div className="text-xs opacity-60 flex flex-col items-center">
+                          <span>Select from the left, add manually, or</span>
+                          <span onClick={() => fileInputRef.current?.click()} className="text-blue-500 font-bold cursor-pointer hover:underline">upload a file</span>
+                        </div>
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                         {recipients.map((r) => (
                             <div key={r.email} className="flex items-center gap-2 pl-3 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm group hover:border-blue-300 transition-all">
                                 <div className="flex flex-col leading-none">
-                                    <span className="text-xs font-bold text-slate-700">{r.name}</span>
-                                    <span className="text-[10px] text-slate-400">{r.email}</span>
+                                    <span className="text-xs font-bold text-slate-700 max-w-[100px] truncate">{r.name}</span>
+                                    <span className="text-[10px] text-slate-400 max-w-[120px] truncate">{r.email}</span>
                                 </div>
                                 <button onClick={() => removeRecipient(r.email)} className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-md transition-colors">
                                     <X className="w-3 h-3" />
