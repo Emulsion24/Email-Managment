@@ -532,7 +532,7 @@ export async function POST(req: Request) {
                         </td>
 
                         <td align="right" valign="top" style="padding-top:6px; padding-right:10px;">
-                            <a href="https://www.facebook.com/rezillion.energy/" style="margin-left:10px;">
+                            <a href="https://www.facebook.com/rezillion" style="margin-left:10px;">
                                 <img src="https://img.icons8.com/ios-filled/50/ffffff/facebook-f.png" width="16" alt="Facebook">
                             </a>
                             <a href="https://www.instagram.com/rezillion.energy/" style="margin-left:10px;">
@@ -544,6 +544,9 @@ export async function POST(req: Request) {
                             <a href="https://www.youtube.com/@rezillion.energy" style="margin-left:10px;">
                                 <img src="https://img.icons8.com/ios-filled/50/ffffff/youtube-play.png" width="16" alt="YouTube">
                             </a>
+                            <a href="https://www.linkedin.com/company/rezillion" style="margin-left:10px;">
+    <img src="https://img.icons8.com/ios-filled/50/ffffff/linkedin.png" width="16" alt="LinkedIn">
+</a>
                         </td>
                     </tr>
 
@@ -612,7 +615,7 @@ export async function POST(req: Request) {
                 <div class="savings-container">
                     
                     <div class="font-header" style="text-align: center; color: #ffffff; font-size: 48px; font-weight: 400; margin-bottom: 30px; line-height:1.2;">
-                        <span style="white-space: nowrap;">Save < <span style="font-weight: 700;">₹ 30,000</span></span><br>on every project
+                        <span style="white-space: nowrap;">Save < <span style="font-weight: 700;">₹ 30,000<span style="color: red;">*</span></span></span><br>on every project
                     </div>
 
                     <div class="savings-item">
@@ -689,8 +692,13 @@ export async function POST(req: Request) {
                             </tr>
                         </table>
                     </div>
+                   <div style="text-align: right; margin-top: 10px; font-size: 15px; color: #ffffff;">  
+    <span style="color: red;">*</span>opportunity cost
+</div>
                 </div>
+                
             </td>
+            
         </tr>
 
         <tr>
