@@ -57,7 +57,7 @@ export async function POST(req: Request) {
 
     // --- 4. TEMPLATE LOGIC ---
     if (templateName === 'Installer Welcome Email') {
-      subject = `Welcome to the Rezillion Installer Network, ${name || 'Partner'}!`;
+      subject = `Verified solar projects sent directly to you. Get Free Installer Account, ${name || 'Partner'}!`;
       emailHtml = `
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
                                                     <table border="0" cellpadding="0" cellspacing="0">
                                                         <tr>
                                                             <td align="center" bgcolor="#1a1a2e" style="border-radius: 4px;">
-                                                                <a href="https://rezillion.energy/installer-network" style="font-size: 14px; font-weight: bold; font-family: Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 28px; display: inline-block; border-radius: 4px; background-color: #1a1a2e;">Register Now</a>
+                                                                <a href="https://rezillion.energy/installer-network" style="font-size: 14px; font-weight: bold; font-family: Arial, sans-serif; color: #ffffff; text-decoration: none; padding: 12px 28px; display: inline-block; border-radius: 4px; background-color: #1a1a2e;">Get Free Installer Account</a>
                                                             </td>
                                                         </tr>
                                                     </table>
@@ -323,7 +323,7 @@ export async function POST(req: Request) {
 </html>`;
     } else {
       // Default to User Welcome
-      subject = `Welcome to Rezillion, ${name || 'User'}!`;
+      subject = `Save Up To ₹30,000 On Your Solar Project Instantly: Design, compare, and book verified solar installers, ${name || 'User'}!`;
       emailHtml = `
 <!DOCTYPE html>
 <html lang="en">
